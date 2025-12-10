@@ -37,9 +37,12 @@ interface OntologyState {
     removeProperty: (nodeId: string, propertyId: string) => void;
 
     // Rule Actions
-    addRule: (nodeId: string, rule: LogicRule) => void;
     updateRule: (nodeId: string, ruleId: string, updates: Partial<LogicRule>) => void;
     removeRule: (nodeId: string, ruleId: string) => void;
+
+    // View Mode
+    viewMode: 'schema' | 'graph';
+    setViewMode: (mode: 'schema' | 'graph') => void;
 }
 
 // Initial Data based on Use Case Catalog
@@ -478,8 +481,76 @@ export const useOntologyStore = create<OntologyState>()(
             removeEdge: (id) =>
                 set((state) => ({
                     edges: state.edges.filter((edge) => edge.id !== id),
-                    selectedEdgeId: null
+                    selectedEdgeId: state.selectedEdgeId === id ? null : state.selectedEdgeId,
                 })),
+
+            viewMode: 'schema',
+            setViewMode: (mode) =>
+                set((state) => {
+                    if (mode === 'schema') {
+                        // Revert to schema view: remove property nodes
+                        const originalNodes = state.nodes
+                            .filter(n => n.data.type !== 'property')
+                            .map(n => ({ ...n, type: 'classNode' }));
+
+                        const originalEdges = state.edges.filter(e => !e.data?.isPropertyEdge);
+
+                        return {
+                            viewMode: mode,
+                            nodes: originalNodes,
+                            edges: originalEdges
+                        };
+                    } else {
+                        // Switch to graph view: expand properties
+                        const propertyNodes: Node<OntologyNodeData>[] = [];
+                        const propertyEdges: Edge[] = [];
+
+                        state.nodes.forEach(classNode => {
+                            classNode.data.properties.forEach((prop) => {
+                                const propNodeId = `${classNode.id}_prop_${prop.id}`;
+                                propertyNodes.push({
+                                    id: propNodeId,
+                                    type: 'graphNode',
+                                    // Initial position near parent
+                                    position: {
+                                        x: classNode.position.x + (Math.random() - 0.5) * 50,
+                                        y: classNode.position.y + (Math.random() - 0.5) * 50
+                                    },
+                                    data: {
+                                        label: prop.name,
+                                        type: 'property' as const,
+                                        description: prop.description,
+                                        properties: [],
+                                        rules: []
+                                    }
+                                });
+
+                                propertyEdges.push({
+                                    id: `e_${classNode.id}_${prop.id}`,
+                                    source: classNode.id,
+                                    target: propNodeId,
+                                    type: 'default', // standard edge
+                                    animated: true,
+                                    style: { stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4' },
+                                    data: { isPropertyEdge: true }
+                                } as Edge);
+                            });
+                        });
+
+                        const graphNodes = state.nodes.map(n => ({
+                            ...n,
+                            type: 'graphNode',
+                            data: { ...n.data, type: 'class' as const } // Explicitly mark as class
+                        }));
+
+                        return {
+                            viewMode: mode,
+                            nodes: [...graphNodes, ...propertyNodes],
+                            edges: [...state.edges, ...propertyEdges]
+                        };
+                    }
+                }),
+
         }),
         {
             name: 'ontology-storage',

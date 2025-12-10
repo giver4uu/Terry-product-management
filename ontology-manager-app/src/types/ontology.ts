@@ -21,6 +21,7 @@ export interface LogicRule {
 
 export interface OntologyNodeData {
     label: string;
+    type?: 'class' | 'property';
     properties: PropertyDefinition[];
     rules: LogicRule[];
     description?: string;
@@ -30,4 +31,5 @@ export interface OntologyEdgeData {
     label: string;
     cardinality: Cardinality;
     description?: string;
+    isPropertyEdge?: boolean;
 }

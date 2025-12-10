@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import ReactFlow, {
     Background,
     Controls,
@@ -11,8 +11,9 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { useOntologyStore } from '../stores/useOntologyStore';
 import ClassNode from './ClassNode';
+import GraphNode from './GraphNode';
 import { useLayout } from '../lib/useLayout';
-import { Plus, LayoutDashboard } from 'lucide-react';
+import { Plus, LayoutDashboard, Network, BoxSelect } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +21,7 @@ import { useThemeStore } from '../stores/useThemeStore';
 
 const nodeTypes: NodeTypes = {
     classNode: ClassNode,
+    graphNode: GraphNode
 };
 
 // Separated component to use the ReactFlowProvider context
@@ -34,21 +36,35 @@ const OntologyCanvasInternal = () => {
         onConnect,
         selectNode,
         selectEdge,
-        addNode
+        addNode,
+        viewMode,
+        setViewMode
     } = useOntologyStore();
 
-    const { onLayout } = useLayout();
+    const { onLayout, onForceLayout } = useLayout();
 
     const bgColor = theme === 'dark' ? '#334155' : '#cbd5e1'; // Slate-700 vs Slate-300
     // miniMapBg is handled by className (bg-slate-50 dark:bg-slate-900)
     const miniMapMask = theme === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)';
     const miniMapNode = theme === 'dark' ? '#1e293b' : '#cbd5e1';
 
+    // Layout effect when view mode changes
+    useEffect(() => {
+        if (viewMode === 'graph') {
+            // Give it a moment for the node types to switch then layout
+            setTimeout(onForceLayout, 10);
+        } else {
+            // For schema mode, we might want to keep the positions or re-layout
+            // For now, let's just leave them or do a TB layout
+            // setTimeout(() => onLayout('TB'), 10);
+        }
+    }, [viewMode, onForceLayout, onLayout]);
+
     const handleAddNode = useCallback(() => {
         const id = `node_${Date.now()}`;
         addNode({
             id,
-            type: 'classNode',
+            type: viewMode === 'graph' ? 'graphNode' : 'classNode',
             position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
             data: {
                 label: 'New Class',
@@ -56,7 +72,12 @@ const OntologyCanvasInternal = () => {
                 rules: []
             }
         });
-    }, [addNode]);
+    }, [addNode, viewMode]);
+
+    const handleToggleView = useCallback(() => {
+        const newMode = viewMode === 'schema' ? 'graph' : 'schema';
+        setViewMode(newMode);
+    }, [viewMode, setViewMode]);
 
     const onPaneClick = useCallback(() => {
         selectNode(null);
@@ -87,7 +108,7 @@ const OntologyCanvasInternal = () => {
 
             const newNode = {
                 id: `node_${Date.now()}`,
-                type,
+                type: viewMode === 'graph' ? 'graphNode' : 'classNode', // Respect current mode
                 position,
                 data: {
                     label: 'New Class',
@@ -98,7 +119,7 @@ const OntologyCanvasInternal = () => {
 
             addNode(newNode);
         },
-        [addNode]
+        [addNode, viewMode]
     );
 
     return (
@@ -142,9 +163,21 @@ const OntologyCanvasInternal = () => {
                         "flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all shadow-lg border",
                         "bg-secondary border-border text-secondary-foreground hover:bg-slate-700 hover:text-white"
                     )}
+                    title="Tree Layout"
                 >
                     <LayoutDashboard className="w-4 h-4 fill-current" />
-                    <span>{t('auto_layout')}</span>
+                </button>
+                <button
+                    onClick={handleToggleView}
+                    className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all shadow-lg border",
+                        viewMode === 'graph'
+                            ? "bg-purple-600 border-purple-600 text-white hover:bg-purple-700"
+                            : "bg-secondary border-border text-secondary-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
+                    )}
+                >
+                    {viewMode === 'graph' ? <BoxSelect className="w-4 h-4" /> : <Network className="w-4 h-4" />}
+                    <span>{viewMode === 'graph' ? 'Schema View' : 'Graph View'}</span>
                 </button>
             </Panel>
         </ReactFlow>
