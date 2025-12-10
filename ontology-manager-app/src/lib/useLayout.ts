@@ -41,21 +41,24 @@ export const useLayout = () => {
 
         dagre.layout(dagreGraph);
 
-        // Map layouted positions back to nodes
+        // Find Candidate position to use as center offset
+        const candidatePosition = dagreGraph.node('candidate');
+        const offsetX = candidatePosition ? candidatePosition.x : 0;
+        const offsetY = candidatePosition ? candidatePosition.y : 0;
+
+        // Map layouted positions back to nodes, shifting so Candidate is at center
         const layoutedNodes = nodes.map((node) => {
             const nodeWithPosition = dagreGraph.node(node.id);
-            // Dagre gives center point, ReactFlow expects top-left
             return {
                 ...node,
                 position: {
-                    x: nodeWithPosition.x - NODE_WIDTH / 2,
-                    y: nodeWithPosition.y - NODE_HEIGHT / 2,
+                    x: nodeWithPosition.x - offsetX - NODE_WIDTH / 2,
+                    y: nodeWithPosition.y - offsetY - NODE_HEIGHT / 2,
                 },
             };
         });
 
         // Trigger update
-        // We trigger an explicit change event for all nodes
         onNodesChange(
             layoutedNodes.map(node => ({
                 id: node.id,
@@ -71,17 +74,23 @@ export const useLayout = () => {
 
         // Create a simulation
         // D3 modifies objects in place, so we create clones to avoid state mutation issues initially
-        const simNodes = nodes.map(node => ({ ...node, x: node.position.x, y: node.position.y }));
+        const simNodes = nodes.map(node => ({
+            ...node,
+            x: node.position.x,
+            y: node.position.y,
+            // Fix Candidate at center
+            fx: node.id === 'candidate' ? 0 : undefined,
+            fy: node.id === 'candidate' ? 0 : undefined
+        }));
         const simEdges = edges.map(edge => ({ ...edge, source: edge.source, target: edge.target }));
 
         const simulation = forceSimulation(simNodes as any)
-            .force("link", forceLink(simEdges).id((d: any) => d.id).distance(150)) // 150 distance as per user code
-            .force("charge", forceManyBody().strength(-800)) // -800 strength as per user code
+            .force("link", forceLink(simEdges).id((d: any) => d.id).distance(180)) // Increased distance for better spread
+            .force("charge", forceManyBody().strength(-600)) // Slightly less repulsion
             .force("center", forceCenter(0, 0))
-            .force("collide", forceCollide().radius(40)); // 40 radius collision
+            .force("collide", forceCollide().radius(60)); // Larger collision radius
 
         // Run simulation manually for a few ticks to settle (static layout)
-        // Alternatively we can run it on tick, but for "Snap to Layout" static is fine
         simulation.stop();
         for (let i = 0; i < 300; ++i) simulation.tick();
 

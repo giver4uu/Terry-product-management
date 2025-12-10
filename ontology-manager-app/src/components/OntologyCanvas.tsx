@@ -68,6 +68,7 @@ const OntologyCanvasInternal = () => {
             position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
             data: {
                 label: 'New Class',
+                kind: 'class',
                 properties: [],
                 rules: []
             }
@@ -112,6 +113,7 @@ const OntologyCanvasInternal = () => {
                 position,
                 data: {
                     label: 'New Class',
+                    kind: 'class' as const,
                     properties: [],
                     rules: []
                 },

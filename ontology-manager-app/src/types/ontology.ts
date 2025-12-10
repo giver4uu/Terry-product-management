@@ -21,10 +21,18 @@ export interface LogicRule {
 
 export interface OntologyNodeData {
     label: string;
-    type?: 'class' | 'property';
+    kind: 'class' | 'property';  // QW#1: Required field (was 'type?')
     properties: PropertyDefinition[];
     rules: LogicRule[];
     description?: string;
+
+    // QW#2: Metadata for Graph View property nodes
+    _metadata?: {
+        originalType?: PropertyType;
+        originalRequired?: boolean;
+        originalId?: string;
+        parentClassId?: string;
+    };
 }
 
 export interface OntologyEdgeData {

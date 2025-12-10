@@ -54,6 +54,7 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 50, y: 300 },
         data: {
             label: 'Candidate',
+            kind: 'class',
             description: '채용 지원자 개인 (The central entity of recruitment)',
             properties: [
                 { id: 'c1', name: 'name', type: 'text', required: true, description: '지원자 이름' },
@@ -72,7 +73,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 450, y: 50 },
         data: {
             label: 'Job Posting',
-            description: '채용 공고 (Target of the application)',
+            kind: 'class',
+            description: '채용 공고 (Position opening)',
             properties: [
                 { id: 'jp1', name: 'title', type: 'text', required: true, description: '공고 제목' },
                 { id: 'jp2', name: 'department_id', type: 'text', required: true, description: '소속 부서 ID' },
@@ -88,7 +90,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 450, y: 300 },
         data: {
             label: 'Application',
-            description: '지원 내역 (Linking Candidate to Job Posting)',
+            kind: 'class',
+            description: '지원서 (Submission record)',
             properties: [
                 { id: 'app1', name: 'applied_date', type: 'date', required: true, description: '지원 일자' },
                 { id: 'app2', name: 'current_stage', type: 'text', required: true, description: '현재 진행 단계' },
@@ -105,7 +108,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 850, y: 300 },
         data: {
             label: 'Interview',
-            description: '면접 이벤트 (Scheduled event)',
+            kind: 'class',
+            description: '면접 (Interview session)',
             properties: [
                 { id: 'int1', name: 'scheduled_date', type: 'date', required: true, description: '면접 예정 일시' },
                 { id: 'int2', name: 'type', type: 'text', required: true, description: '면접 유형 (화상, 대면 등)' },
@@ -121,7 +125,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 1150, y: 300 },
         data: {
             label: 'Evaluation',
-            description: '평가 기록 (Outcome of an interview)',
+            kind: 'class',
+            description: '평가 (Candidate assessment)',
             properties: [
                 { id: 'ev1', name: 'score', type: 'number', required: true, description: '평가 점수 (1-5)' },
                 { id: 'ev2', name: 'feedback_text', type: 'text', required: true, description: '상세 피드백 내용' },
@@ -139,7 +144,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 450, y: 600 },
         data: {
             label: 'Recruitment Stage',
-            description: '채용 단계 정의 (Pipeline steps)',
+            kind: 'class',
+            description: '채용 단계 (Stage in the hiring funnel)',
             properties: [
                 { id: 'rs1', name: 'stage_name', type: 'text', required: true, description: '단계 명칭' },
                 { id: 'rs2', name: 'avg_duration', type: 'number', required: false, description: '평균 소요 기간 (일)' },
@@ -155,7 +161,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 250, y: 450 },
         data: {
             label: 'Stage Transition',
-            description: '단계 이동 이벤트 (History log)',
+            kind: 'class',
+            description: '단계 이동 (Recorded movement between stages)',
             properties: [
                 { id: 'st1', name: 'from_stage', type: 'text', required: true, description: '이전 단계' },
                 { id: 'st2', name: 'to_stage', type: 'text', required: true, description: '이동한 단계' },
@@ -171,6 +178,7 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 850, y: 550 },
         data: {
             label: 'Task',
+            kind: 'class',
             description: '채용 관련 할 일 (To-Do items)',
             properties: [
                 { id: 't1', name: 'type', type: 'text', required: true, description: '작업 유형' },
@@ -187,7 +195,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 50, y: 550 },
         data: {
             label: 'Communication',
-            description: '커뮤니케이션 기록 (Emails, Calls)',
+            kind: 'class',
+            description: '커뮤니케이션 (Messaging record)',
             properties: [
                 { id: 'cm1', name: 'channel', type: 'text', required: true, description: '소통 채널' },
                 { id: 'cm2', name: 'timestamp', type: 'date', required: true, description: '발송 일시' },
@@ -205,7 +214,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 250, y: 800 },
         data: {
             label: 'Recruiter',
-            description: '리크루터 (Hiring Staff)',
+            kind: 'class',
+            description: '리크루팅 담당자 (HR professional)',
             properties: [
                 { id: 'r1', name: 'name', type: 'text', required: true, description: '리크루터 이름' },
                 { id: 'r2', name: 'assigned_positions', type: 'number', required: false, description: '담당 포지션 수' },
@@ -219,7 +229,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 1150, y: 550 },
         data: {
             label: 'Interviewer',
-            description: '면접관 (Evaluator)',
+            kind: 'class',
+            description: '면접관 (Hiring team member)',
             properties: [
                 { id: 'i1', name: 'name', type: 'text', required: true, description: '면접관 이름' },
                 { id: 'i2', name: 'email', type: 'text', required: true, description: '이메일' },
@@ -237,7 +248,8 @@ const initialNodes: Node<OntologyNodeData>[] = [
         position: { x: 650, y: 800 },
         data: {
             label: 'AI Recommendation',
-            description: 'AI 제안 및 알림 (Suggesions)',
+            kind: 'class',
+            description: 'AI 제안 (AI-generated suggestions)',
             properties: [
                 { id: 'ai1', name: 'type', type: 'text', required: true, description: '제안 유형 (Risk, Info)' },
                 { id: 'ai2', name: 'confidence_score', type: 'number', required: true, description: 'AI 확신도 (0-1)' },
@@ -487,66 +499,75 @@ export const useOntologyStore = create<OntologyState>()(
             viewMode: 'schema',
             setViewMode: (mode) =>
                 set((state) => {
+                    // First, always get clean class-only nodes and edges
+                    const classNodes = state.nodes.filter(n => n.data.kind !== 'property');
+                    const classEdges = state.edges.filter(e => !e.data?.isPropertyEdge);
+
                     if (mode === 'schema') {
-                        // Revert to schema view: remove property nodes
-                        const originalNodes = state.nodes
-                            .filter(n => n.data.type !== 'property')
-                            .map(n => ({ ...n, type: 'classNode' }));
-
-                        const originalEdges = state.edges.filter(e => !e.data?.isPropertyEdge);
-
+                        // Schema View: boxes with properties inside
                         return {
                             viewMode: mode,
-                            nodes: originalNodes,
-                            edges: originalEdges
+                            nodes: classNodes.map(n => ({
+                                ...n,
+                                type: 'classNode'
+                            })),
+                            edges: classEdges
                         };
                     } else {
-                        // Switch to graph view: expand properties
+                        // Graph View: expand properties as connected nodes
                         const propertyNodes: Node<OntologyNodeData>[] = [];
                         const propertyEdges: Edge[] = [];
 
-                        state.nodes.forEach(classNode => {
-                            classNode.data.properties.forEach((prop) => {
+                        classNodes.forEach(classNode => {
+                            classNode.data.properties.forEach((prop, index) => {
                                 const propNodeId = `${classNode.id}_prop_${prop.id}`;
+                                // Position properties in a circle around the class
+                                const angle = (index / classNode.data.properties.length) * Math.PI * 2;
+                                const radius = 120;
+
                                 propertyNodes.push({
                                     id: propNodeId,
                                     type: 'graphNode',
-                                    // Initial position near parent
                                     position: {
-                                        x: classNode.position.x + (Math.random() - 0.5) * 50,
-                                        y: classNode.position.y + (Math.random() - 0.5) * 50
+                                        x: classNode.position.x + Math.cos(angle) * radius,
+                                        y: classNode.position.y + Math.sin(angle) * radius
                                     },
                                     data: {
                                         label: prop.name,
-                                        type: 'property' as const,
+                                        kind: 'property' as const,
                                         description: prop.description,
                                         properties: [],
-                                        rules: []
+                                        rules: [],
+                                        _metadata: {
+                                            originalType: prop.type,
+                                            originalRequired: prop.required,
+                                            originalId: prop.id,
+                                            parentClassId: classNode.id
+                                        }
                                     }
                                 });
 
                                 propertyEdges.push({
-                                    id: `e_${classNode.id}_${prop.id}`,
+                                    id: `e_prop_${classNode.id}_${prop.id}`,
                                     source: classNode.id,
                                     target: propNodeId,
-                                    type: 'default', // standard edge
-                                    animated: true,
-                                    style: { stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4' },
-                                    data: { isPropertyEdge: true }
-                                } as Edge);
+                                    type: 'default',
+                                    animated: false,
+                                    style: { stroke: '#f59e0b', strokeWidth: 1, strokeDasharray: '4' },
+                                    data: { isPropertyEdge: true, label: '', cardinality: '1:1' as const }
+                                });
                             });
                         });
 
-                        const graphNodes = state.nodes.map(n => ({
+                        const graphNodes = classNodes.map(n => ({
                             ...n,
-                            type: 'graphNode',
-                            data: { ...n.data, type: 'class' as const } // Explicitly mark as class
+                            type: 'graphNode'
                         }));
 
                         return {
                             viewMode: mode,
                             nodes: [...graphNodes, ...propertyNodes],
-                            edges: [...state.edges, ...propertyEdges]
+                            edges: [...classEdges, ...propertyEdges]
                         };
                     }
                 }),
@@ -555,7 +576,11 @@ export const useOntologyStore = create<OntologyState>()(
         {
             name: 'ontology-storage',
             storage: createJSONStorage(() => localStorage),
-            partialize: (state) => ({ nodes: state.nodes, edges: state.edges }),
+            // Only persist class nodes and non-property edges
+            partialize: (state) => ({
+                nodes: state.nodes.filter(n => n.data.kind !== 'property'),
+                edges: state.edges.filter(e => !e.data?.isPropertyEdge)
+            }),
             version: 1,
             migrate: (persistedState: any, version) => {
                 if (version === 0) {
