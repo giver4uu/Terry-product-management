@@ -1,0 +1,1 @@
+### 그리팅 채용 권한 가이드 link : https://guide.greetinghr.com/ko/articles/hiringauthority-9325f99b
