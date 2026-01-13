@@ -38,10 +38,14 @@ const classes: [string, OntologyClass][] = [
     // Tier 4: AI Objects
     ['ai_recommendation', { id: 'ai_recommendation', name: 'AI Recommendation', description: 'AI 제안 (AI-generated suggestions)' }],
 
-    // Tier 5: Extended Objects
+    // Extended Objects
     ['offer', { id: 'offer', name: 'Offer', description: '최종 합격 제안 (연봉 협상 및 수락/거절)' }],
     ['hiring_manager', { id: 'hiring_manager', name: 'Hiring Manager', description: '채용 의뢰 부서장 (실제 의사결정권자)' }],
     ['department', { id: 'department', name: 'Department', description: '조직 부서' }],
+    ['data_quality_metrics', { id: 'data_quality_metrics', name: 'Data Quality Metrics', description: '데이터 품질 측정 지표' }],
+    ['user_role', { id: 'user_role', name: 'User Role', description: '사용자 역할 및 권한 레벨' }],
+    ['ai_feedback_loop', { id: 'ai_feedback_loop', name: 'AI Feedback Loop', description: 'AI 학습 및 피드백 데이터' }],
+    ['benchmark_data', { id: 'benchmark_data', name: 'Benchmark Data', description: '산업 평균 및 벤치마크 데이터' }],
 ];
 
 // =============================================================================
@@ -123,12 +127,35 @@ const properties: [string, OntologyProperty][] = [
     ['response_deadline', { id: 'response_deadline', name: 'response_deadline', dataType: 'date', description: '회신 기한' }],
     ['negotiation_rounds', { id: 'negotiation_rounds', name: 'negotiation_rounds', dataType: 'number', description: '협상 라운드 수' }],
 
-    // Manager/Department properties
     ['approval_authority', { id: 'approval_authority', name: 'approval_authority', dataType: 'boolean', description: '예산 승인 권한' }],
     ['headcount_quota', { id: 'headcount_quota', name: 'headcount_quota', dataType: 'number', description: '연간 채용 가능 인원' }],
     ['headcount_budget', { id: 'headcount_budget', name: 'headcount_budget', dataType: 'number', description: '연간 채용 예산' }],
     ['avg_hire_duration', { id: 'avg_hire_duration', name: 'avg_hire_duration', dataType: 'number', description: '평균 채용 소요일' }],
     ['parent_department_id', { id: 'parent_department_id', name: 'parent_department_id', dataType: 'text', description: '상위 부서 ID' }],
+
+    ['data_quality_score', { id: 'data_quality_score', name: 'data_quality_score', dataType: 'number', description: '데이터 품질 점수 (0-100)' }],
+    ['completeness', { id: 'completeness', name: 'completeness', dataType: 'number', description: '필드 완성도 (0-100%)' }],
+    ['consistency', { id: 'consistency', name: 'consistency', dataType: 'number', description: '데이터 일관성 (0-100%)' }],
+    ['timeliness', { id: 'timeliness', name: 'timeliness', dataType: 'number', description: '최신성 (0-100%)' }],
+    ['last_updated', { id: 'last_updated', name: 'last_updated', dataType: 'date', description: '최종 업데이트 일시' }],
+    ['update_frequency', { id: 'update_frequency', name: 'update_frequency', dataType: 'number', description: '주간 업데이트 빈도' }],
+
+    ['alert_type', { id: 'alert_type', name: 'alert_type', dataType: 'text', description: '알림 유형 (bottleneck, action, context)' }],
+    ['urgency_level', { id: 'urgency_level', name: 'urgency_level', dataType: 'text', description: '긴급도 (high, medium, low)' }],
+    ['auto_send_enabled', { id: 'auto_send_enabled', name: 'auto_send_enabled', dataType: 'boolean', description: '자동 발송 여부' }],
+    ['confidence_score', { id: 'confidence_score', name: 'confidence_score', dataType: 'number', description: 'AI 확신도 (0-1)' }],
+    ['reasoning', { id: 'reasoning', name: 'reasoning', dataType: 'text', description: '제안 근거' }],
+    ['suggested_action', { id: 'suggested_action', name: 'suggested_action', dataType: 'text', description: '권장 행동' }],
+    ['user_action', { id: 'user_action', name: 'user_action', dataType: 'text', description: '사용자 반응' }],
+
+    ['authority_level', { id: 'authority_level', name: 'authority_level', dataType: 'text', description: '권한 레벨 (employee, manager, vp)' }],
+    ['department_access', { id: 'department_access', name: 'department_access', dataType: 'text', description: '접근 가능 부서' }],
+    ['escalation_rules', { id: 'escalation_rules', name: 'escalation_rules', dataType: 'text', description: '에스컬레이션 규칙' }],
+
+    ['industry_average', { id: 'industry_average', name: 'industry_average', dataType: 'number', description: '산업 평균 수치' }],
+    ['similar_cases_count', { id: 'similar_cases_count', name: 'similar_cases_count', dataType: 'number', description: '유사 케이스 수' }],
+    ['benchmark_source', { id: 'benchmark_source', name: 'benchmark_source', dataType: 'text', description: '벤치마크 데이터 출처' }],
+    ['last_benchmark_update', { id: 'last_benchmark_update', name: 'last_benchmark_update', dataType: 'date', description: '최종 벤치마크 업데이트' }],
 ];
 
 // =============================================================================
@@ -224,11 +251,41 @@ const propertyLinks: ClassPropertyLink[] = [
     { classId: 'hiring_manager', propertyId: 'approval_authority', required: true },
     { classId: 'hiring_manager', propertyId: 'headcount_quota', required: false },
 
-    // Department
     { classId: 'department', propertyId: 'name', required: true },
     { classId: 'department', propertyId: 'headcount_budget', required: false },
     { classId: 'department', propertyId: 'avg_hire_duration', required: false },
     { classId: 'department', propertyId: 'parent_department_id', required: false },
+
+    { classId: 'data_quality_metrics', propertyId: 'data_quality_score', required: true },
+    { classId: 'data_quality_metrics', propertyId: 'completeness', required: true },
+    { classId: 'data_quality_metrics', propertyId: 'consistency', required: true },
+    { classId: 'data_quality_metrics', propertyId: 'timeliness', required: true },
+    { classId: 'data_quality_metrics', propertyId: 'last_updated', required: true },
+    { classId: 'data_quality_metrics', propertyId: 'update_frequency', required: false },
+
+    { classId: 'ai_recommendation', propertyId: 'type', required: true },
+    { classId: 'ai_recommendation', propertyId: 'confidence_score', required: true },
+    { classId: 'ai_recommendation', propertyId: 'reasoning', required: true },
+    { classId: 'ai_recommendation', propertyId: 'suggested_action', required: true },
+    { classId: 'ai_recommendation', propertyId: 'user_action', required: false },
+    { classId: 'ai_recommendation', propertyId: 'alert_type', required: true },
+    { classId: 'ai_recommendation', propertyId: 'urgency_level', required: true },
+    { classId: 'ai_recommendation', propertyId: 'auto_send_enabled', required: true },
+
+    { classId: 'user_role', propertyId: 'name', required: true },
+    { classId: 'user_role', propertyId: 'authority_level', required: true },
+    { classId: 'user_role', propertyId: 'department_access', required: true },
+    { classId: 'user_role', propertyId: 'escalation_rules', required: false },
+
+    { classId: 'ai_feedback_loop', propertyId: 'user_action', required: true },
+    { classId: 'ai_feedback_loop', propertyId: 'feedback_timestamp', required: true },
+    { classId: 'ai_feedback_loop', propertyId: 'recommendation_id', required: true },
+    { classId: 'ai_feedback_loop', propertyId: 'actual_outcome', required: true },
+
+    { classId: 'benchmark_data', propertyId: 'industry_average', required: true },
+    { classId: 'benchmark_data', propertyId: 'similar_cases_count', required: true },
+    { classId: 'benchmark_data', propertyId: 'benchmark_source', required: true },
+    { classId: 'benchmark_data', propertyId: 'last_benchmark_update', required: true },
 ];
 
 // =============================================================================
@@ -264,10 +321,17 @@ const relations: OntologyRelation[] = [
     { id: 'e_ai_app', sourceClassId: 'ai_recommendation', targetClassId: 'application', name: 'RECOMMENDS_FOR', cardinality: 'N:1', description: 'AI가 특정 지원 건에 대해 제안함' },
     { id: 'e_ai_eval', sourceClassId: 'ai_recommendation', targetClassId: 'evaluation', name: 'VALIDATED_BY', cardinality: 'N:1', description: 'AI 제안이 실제 평가 결과로 검증됨' },
 
-    // Extended Relationships
     { id: 'e_eval_offer', sourceClassId: 'evaluation', targetClassId: 'offer', name: 'RESULTS_IN', cardinality: '1:1', description: '평가 결과로 제안서 생성' },
     { id: 'e_hm_job', sourceClassId: 'hiring_manager', targetClassId: 'job_posting', name: 'REQUESTS', cardinality: '1:N', description: '부서장이 공고 요청' },
     { id: 'e_dept_job', sourceClassId: 'department', targetClassId: 'job_posting', name: 'OWNS', cardinality: '1:N', description: '부서가 공고 소유' },
+
+    { id: 'e_quality_monitors', sourceClassId: 'data_quality_metrics', targetClassId: 'application', name: 'MONITORS', cardinality: 'N:1', description: '품질 지표가 특정 지원 건을 모니터링' },
+    { id: 'e_quality_stage', sourceClassId: 'data_quality_metrics', targetClassId: 'recruitment_stage', name: 'TRACKS', cardinality: 'N:1', description: '품질 지표가 채용 단계를 추적' },
+    { id: 'e_ai_feedback', sourceClassId: 'ai_recommendation', targetClassId: 'ai_feedback_loop', name: 'LEARNS_FROM', cardinality: 'N:1', description: 'AI가 사용자 피드백으로 학습' },
+    { id: 'e_ai_validates', sourceClassId: 'ai_recommendation', targetClassId: 'evaluation', name: 'VALIDATED_BY', cardinality: 'N:1', description: 'AI 제안이 실제 평가 결과로 검증됨' },
+    { id: 'e_user_controls', sourceClassId: 'user_role', targetClassId: 'ai_recommendation', name: 'CONTROLS', cardinality: 'N:1', description: '사용자 역할이 AI 알림을 제어' },
+    { id: 'e_benchmark_provides', sourceClassId: 'benchmark_data', targetClassId: 'job_posting', name: 'PROVIDES_CONTEXT', cardinality: 'N:1', description: '벤치마크가 공고에 컨텍스트 제공' },
+    { id: 'e_benchmark_supports', sourceClassId: 'benchmark_data', targetClassId: 'ai_recommendation', name: 'SUPPORTS', cardinality: 'N:1', description: '벤치마크가 AI 제안을 지원' },
 ];
 
 // =============================================================================
@@ -302,4 +366,8 @@ export const initialPositions: Map<string, { x: number; y: number }> = new Map([
     ['offer', { x: 1450, y: 300 }],
     ['hiring_manager', { x: 450, y: -150 }],
     ['department', { x: 750, y: -150 }],
+    ['data_quality_metrics', { x: 1250, y: 600 }],
+    ['user_role', { x: 850, y: 800 }],
+    ['ai_feedback_loop', { x: 1450, y: 800 }],
+    ['benchmark_data', { x: 250, y: 150 }],
 ]);

@@ -14,6 +14,83 @@
 
 export type PropertyDataType = 'text' | 'number' | 'date' | 'boolean';
 
+export interface DataQualityMetrics {
+  completeness: number;
+  consistency: number;
+  timeliness: number;
+  trustLevel: 'high' | 'medium' | 'low';
+  gaps: DataGap[];
+  lastUpdated: string;
+}
+
+export interface DataGap {
+  classId: string;
+  missingFields: string[];
+  affectedCount: number;
+  priority: 'high' | 'medium' | 'low';
+  description?: string;
+}
+
+export interface AIRecommendation {
+  id: string;
+  type: 'bottleneck' | 'next_action' | 'reapplicant_context' | 'ghosting_risk' | 'funnel_anomaly' | 'offer_negotiation';
+  targetEntity: string;
+  targetEntityId: string;
+  confidence: number;
+  reasoning: string[];
+  suggestedActions: AIAction[];
+  overrideOptions: OverrideOption[];
+  dataQuality: DataQualityMetrics;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface AIAction {
+  id: string;
+  type: 'send_reminder' | 'review_data' | 'update_stage' | 'contact_candidate' | 'review_similar_cases';
+  description: string;
+  urgency: 'high' | 'medium' | 'low';
+  estimatedTime?: number;
+  autoExecutable?: boolean;
+}
+
+export interface OverrideOption {
+  id: string;
+  type: 'dismiss' | 'postpone' | 'modify' | 'manual_review';
+  label: string;
+  reasonRequired?: boolean;
+}
+
+export interface AlertPermissions {
+  autoSend: {
+    employee: boolean;
+    manager: boolean;
+    vp: boolean;
+  };
+  escalation: {
+    hrApproval: boolean;
+    directOnly: boolean;
+  };
+  tone: 'direct' | 'gentle' | 'informative';
+}
+
+export interface ColdStartStrategy {
+  hasData: boolean;
+  dataCount: number;
+  benchmarkAvailable: boolean;
+  displayMode: 'prediction' | 'similar_cases' | 'industry_average';
+  trustScore: number;
+  message: string;
+}
+
+export interface UserRole {
+  id: string;
+  name: string;
+  authorityLevel: 'employee' | 'manager' | 'vp' | 'hr';
+  departmentAccess: string[];
+  alertPermissions: AlertPermissions;
+}
+
 /**
  * Global property definition.
  * Properties are defined once and can be shared across multiple classes.
