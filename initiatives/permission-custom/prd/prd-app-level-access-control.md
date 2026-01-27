@@ -159,20 +159,6 @@
     - 변경 내용 (예: app_access_control: 'full' → 'member_only')
   - 로그는 멤버 상세 페이지에서 "변경 이력 보기" 버튼으로 조회 가능
 
-### 3.3 긴급 상황
-
-**US-6: 임시 권한 복구 (Optional - Phase 2)**
-- **As a** 대표
-- **When** 긴급 상황(예: 채용 담당자 퇴사, 중요 공고 수정 필요) 발생 시
-- **I want to** 24시간 한시적으로 round-app에 접근할 수 있는 "긴급 모드"를 활성화하고 싶다
-- **So that** HR 담당자 없이도 긴급한 채용 업무를 처리할 수 있다
-- **Acceptance Criteria:**
-  - round-member 우측 상단에 "긴급 모드로 전환" 버튼 표시
-  - 클릭 시 "24시간 동안 채용 관리 기능이 활성화됩니다. 계속하시겠습니까?" 확인 모달
-  - 승인 시 24시간 동안 round-app 접근 가능, 타이머 UI 표시
-  - 24시간 후 자동으로 평가 전용 모드로 복귀
-  - 전환 이력 감사 로그에 기록
-
 ---
 
 ## 4. 기능 명세 (Functional Requirements)
@@ -214,27 +200,8 @@
 | **기본값** | OFF (unchecked) |
 | **변경 권한** | Owner, Admin (단, 본인 계정은 본인이 변경 불가 - 실수 방지) |
 | **저장 확인 모달** | "홍길동님은 이제 평가 화면만 접근할 수 있습니다. 채용 관리 기능은 차단됩니다. 계속하시겠습니까?" [취소] [확인] |
-| **변경 로그** | 감사 로그에 자동 기록 (후술) |
 | **즉시 적용** | 저장 즉시 사용자 세션에 반영. 현재 로그인된 사용자는 다음 페이지 이동 시 리다이렉트 적용. |
 
-#### 4.1.3 감사 로그 스키마
-
-```sql
--- audit_logs 테이블
-{
-  "id": 12345,
-  "timestamp": "2026-01-09T15:30:00Z",
-  "actor_user_id": 456,  -- 변경을 수행한 사람 (HR 담당자)
-  "actor_name": "김철수",
-  "target_user_id": 123,  -- 변경 대상 (CEO)
-  "target_name": "홍길동",
-  "action": "app_access_control_changed",
-  "details": {
-    "from": "full",
-    "to": "member_only"
-  }
-}
-```
 
 ### 4.2 접근 제어 로직
 
@@ -264,444 +231,12 @@
 | **채용 프로세스 수정** | 프로세스 편집 UI 접근 차단 |
 | **오퍼레이션 알림 수신** | 알림 생성 로직에서 `appAccessControl === 'member_only'` 사용자 제외 |
 
-#### 4.2.2 접근 시도 시 동작
 
-**시나리오 1: round-app URL 직접 입력**
-1. 사용자가 `https://app.round.com/jobs` 접근 시도
-2. 백엔드 미들웨어에서 사용자 세션 확인
-3. `appAccessControl === 'member_only'` 감지
-4. 302 리다이렉트: `https://member.round.com/worktask`
-5. 프론트엔드에서 토스트 메시지 표시 (3초 자동 닫힘):
-   - "평가 전용 모드로 설정되어 있습니다. 변경을 원하시면 관리자에게 문의하세요."
+## 5. UI/UX 설계
 
-**시나리오 2: round-member에서 "채용 관리로 이동" 버튼 클릭 시도**
-1. round-member 헤더에 "채용 관리로 이동" 버튼이 있다면
-2. `appAccessControl === 'member_only'` 사용자에게는 버튼 미노출 또는 비활성화
-3. 또는 클릭 시 모달 표시:
-   - "평가 전용 모드가 활성화되어 있습니다. 채용 관리 기능이 필요하시면 [조직 관리자]에게 문의하세요."
+### 5.1 설정 화면 (조직 관리자용)
 
-**시나리오 3: API 직접 호출 시도 (개발자 도구 등)**
-1. 사용자가 Postman 또는 브라우저 개발자 도구로 round-app API 호출 시도
-2. API 미들웨어에서 `req.user.appAccessControl === 'member_only'` 확인
-3. 응답: `403 Forbidden` + `{"error": "Access denied: member_only mode enabled"}`
-
-#### 4.2.3 알림 생성 로직 수정
-
-**현재 (Before):**
-```typescript
-// 모든 Admin/Manager에게 알림 발송
-const admins = await getAdminUsers(organizationId);
-admins.forEach(admin => {
-  sendNotification(admin.id, "지원자 등록됨", candidateData);
-});
-```
-
-**개선 (After):**
-```typescript
-// 평가 전용 모드 사용자 제외
-const admins = await getAdminUsers(organizationId);
-const operationalAdmins = admins.filter(
-  admin => admin.appAccessControl !== 'member_only'
-);
-operationalAdmins.forEach(admin => {
-  sendNotification(admin.id, "지원자 등록됨", candidateData);
-});
-```
-
-### 4.3 긴급 모드 전환 (Optional - Phase 2)
-
-#### 4.3.1 UI 위치
-
-**위치:** round-member 우측 상단 프로필 드롭다운
-
-```
-┌─────────────────────────────────┐
-│ 홍길동 (CEO)                     │
-├─────────────────────────────────┤
-│ 내 프로필                        │
-│ 설정                             │
-│ ─────────────────────            │
-│ ⚠️ 긴급 모드로 전환              │
-│ (24시간 한시적 채용 관리 접근)   │
-│ ─────────────────────            │
-│ 로그아웃                         │
-└─────────────────────────────────┘
-```
-
-#### 4.3.2 작동 방식
-
-1. **활성화 확인 모달:**
-   - "긴급 모드를 활성화하면 24시간 동안 채용 관리 기능(지원자 등록, 공고 수정 등)에 접근할 수 있습니다. 이 작업은 감사 로그에 기록됩니다. 계속하시겠습니까?"
-   - [취소] [활성화]
-
-2. **활성화 후:**
-   - `appAccessControl` 필드를 임시로 `'full'`로 변경 (DB에 만료 시간 함께 저장)
-   - round-app 접근 가능
-   - 우측 상단에 타이머 배지 표시: "긴급 모드 (13시간 45분 남음)"
-
-3. **만료 처리:**
-   - 24시간 후 자동으로 `appAccessControl`을 `'member_only'`로 복구
-   - 사용자에게 알림: "긴급 모드가 종료되었습니다. 평가 전용 모드로 복귀합니다."
-
-4. **수동 비활성화:**
-   - 타이머 배지 클릭 → "긴급 모드 종료" 버튼 → 즉시 평가 전용 모드 복귀
-
-5. **감사 로그:**
-   ```json
-   {
-     "action": "emergency_mode_activated",
-     "user_id": 123,
-     "timestamp": "2026-01-09T16:00:00Z",
-     "expires_at": "2026-01-10T16:00:00Z",
-     "deactivated_at": null  // 수동 종료 시 기록
-   }
-   ```
-
----
-
-## 5. 비기능 요구사항 (Non-Functional Requirements)
-
-### 5.1 성능
-
-| 항목 | 목표 | 측정 방법 |
-|------|------|----------|
-| **권한 체크 응답 시간** | < 100ms | API 미들웨어에서 `appAccessControl` 필드 조회 시간 측정 |
-| **리다이렉트 지연** | < 200ms | 사용자가 round-app URL 입력 후 round-member 페이지 로드 완료까지 시간 |
-| **세션 캐싱** | 권한 정보를 세션에 캐싱하여 매 요청마다 DB 조회 방지 | Redis 캐시 활용 (TTL: 1시간) |
-
-### 5.2 보안
-
-| 항목 | 상세 |
-|------|------|
-| **API 레벨 권한 검증** | 프론트엔드 UI 숨김만으로는 불충분. 모든 round-app API 엔드포인트에서 `appAccessControl` 필드 검증 필수 |
-| **세션 기반 권한 캐싱** | 사용자 로그인 시 `appAccessControl` 정보를 세션(또는 JWT)에 포함시켜, 매 요청마다 DB 조회 부하 최소화 |
-| **본인 권한 변경 차단** | 사용자가 본인의 `appAccessControl` 설정을 변경할 수 없도록 프론트엔드 및 백엔드 레벨에서 검증 |
-| **CORS 정책** | round-app과 round-member는 서로 다른 도메인이므로, 교차 출처 API 호출 차단 (긴급 모드 활성화 시에만 일시 허용) |
-
-### 5.3 감사 (Audit Trail)
-
-| 이벤트 | 기록 내용 |
-|--------|----------|
-| **평가 전용 모드 활성화** | actor_user_id, target_user_id, timestamp, 변경 전/후 값 |
-| **평가 전용 모드 비활성화** | 위와 동일 |
-| **긴급 모드 활성화** | user_id, timestamp, expires_at |
-| **긴급 모드 종료** | user_id, deactivated_at, 종료 사유 (자동 만료 / 수동 비활성화) |
-| **차단된 접근 시도** | user_id, attempted_url, timestamp (선택사항 - 보안 모니터링용) |
-
-### 5.4 사용성 (Usability)
-
-| 항목 | 상세 |
-|------|------|
-| **첫 로그인 안내** | 평가 전용 모드 사용자가 처음 로그인 시 배너 표시: "평가 전용 모드로 설정되어 있습니다. 평가 및 면접 기능만 사용 가능합니다." [확인] [다시 보지 않기] |
-| **내 권한 확인** | round-member 프로필 드롭다운 > "내 권한 보기" 메뉴 추가 → "조직 권한: Admin / 접근 모드: 평가 전용" 표시 |
-| **도움말 링크** | 설정 화면 및 리다이렉트 토스트 메시지에 도움말 링크 제공: "평가 전용 모드란?" |
-
----
-
-## 6. 기술 명세 (Technical Specifications)
-
-### 6.1 데이터 모델
-
-#### 6.1.1 users 테이블 수정
-
-```sql
--- users 테이블에 컬럼 추가
-ALTER TABLE users
-ADD COLUMN app_access_control VARCHAR(20) DEFAULT 'full';
-
--- 가능한 값:
--- 'full': 기본값, round-app 및 round-member 모두 접근 가능
--- 'member_only': 평가 전용 모드, round-member만 접근 가능
-
--- 인덱스 추가 (권한 체크 쿼리 최적화)
-CREATE INDEX idx_users_app_access_control ON users(app_access_control);
-```
-
-#### 6.1.2 audit_logs 테이블 (기존 활용)
-
-```sql
--- 기존 audit_logs 테이블에 새로운 action 타입 추가
-INSERT INTO audit_logs (
-  id,
-  timestamp,
-  actor_user_id,
-  actor_name,
-  target_user_id,
-  target_name,
-  action,  -- 새 값: 'app_access_control_changed', 'emergency_mode_activated', 'emergency_mode_deactivated'
-  details  -- JSON 필드
-) VALUES (
-  UUID(),
-  NOW(),
-  456,  -- HR 담당자 ID
-  '김철수',
-  123,  -- CEO ID
-  '홍길동',
-  'app_access_control_changed',
-  JSON_OBJECT(
-    'from', 'full',
-    'to', 'member_only'
-  )
-);
-```
-
-#### 6.1.3 emergency_mode 테이블 (Phase 2)
-
-```sql
--- 긴급 모드 추적용 별도 테이블
-CREATE TABLE emergency_mode (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  user_id BIGINT NOT NULL,
-  activated_at TIMESTAMP NOT NULL,
-  expires_at TIMESTAMP NOT NULL,
-  deactivated_at TIMESTAMP NULL,
-  deactivated_by VARCHAR(20),  -- 'auto_expire' | 'manual'
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  INDEX idx_user_id (user_id),
-  INDEX idx_expires_at (expires_at)
-);
-```
-
-### 6.2 API 변경
-
-#### 6.2.1 백엔드 미들웨어
-
-**파일:** `round-app/src/middleware/checkAppAccess.ts`
-
-```typescript
-import { Request, Response, NextFunction } from 'express';
-import { getCurrentUser } from '@/services/auth';
-import { ROUND_HOST } from '@/config/constants';
-
-/**
- * round-app 접근 권한 체크 미들웨어
- * appAccessControl이 'member_only'인 사용자는 round-member로 리다이렉트
- */
-export const checkAppAccess = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    // 세션에서 사용자 정보 가져오기 (캐싱)
-    const user = await getCurrentUser(req);
-
-    if (!user) {
-      return res.redirect('/login');
-    }
-
-    // 평가 전용 모드 체크
-    if (user.appAccessControl === 'member_only') {
-      // round-member의 worktask 페이지로 리다이렉트
-      return res.redirect(
-        `${ROUND_HOST.MEMBER}/worktask?redirect_reason=member_only_mode`
-      );
-    }
-
-    // 정상 권한: 다음 미들웨어로 진행
-    next();
-  } catch (error) {
-    console.error('checkAppAccess middleware error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-```
-
-**파일:** `round-app/src/app.ts`
-
-```typescript
-import express from 'express';
-import { checkAppAccess } from '@/middleware/checkAppAccess';
-
-const app = express();
-
-// ... 기타 설정 ...
-
-// round-app의 모든 라우트에 미들웨어 적용
-app.use('/app/*', checkAppAccess);
-
-// 개별 라우트 정의
-app.use('/app/jobs', jobsRouter);
-app.use('/app/candidates', candidatesRouter);
-// ...
-
-export default app;
-```
-
-#### 6.2.2 프론트엔드 라우팅
-
-**파일:** `packages/round/common/src/config/routes/routes-member.ts`
-
-```typescript
-import { User, UserRole } from '@/types/user';
-import { ROUND_HOST } from '@/config/constants';
-
-/**
- * 사용자 권한에 따라 적절한 앱(round-app or round-member)의 URL 반환
- *
- * @param user - 현재 로그인한 사용자 객체
- * @param path - 이동할 경로 (기본값: "/")
- * @returns 완전한 URL (예: "https://member.round.com/worktask")
- */
-export const getRoundManagerMemberUrl = (user?: User, path = "/") => {
-  // 1. 일반 User 역할은 무조건 round-member
-  const isUser = user?.role === UserRole.User;
-
-  // 2. 평가 전용 모드 활성화 여부 체크
-  const isMemberOnly = user?.appAccessControl === "member_only";
-
-  // 3. 둘 중 하나라도 해당하면 round-member 사용
-  const shouldUseMemberApp = isUser || isMemberOnly;
-
-  // 4. 호스트 결정
-  const host = shouldUseMemberApp ? ROUND_HOST.MEMBER : ROUND_HOST.APP;
-
-  return `${host}${path}`;
-};
-
-/**
- * 사용자가 round-app에 접근할 수 있는지 여부 반환
- * "채용 관리로 이동" 버튼 표시 여부 결정에 사용
- */
-export const canAccessRoundApp = (user?: User): boolean => {
-  if (!user) return false;
-
-  // User 역할은 접근 불가
-  if (user.role === UserRole.User) return false;
-
-  // 평가 전용 모드 사용자는 접근 불가
-  if (user.appAccessControl === 'member_only') return false;
-
-  return true;
-};
-```
-
-**파일:** `packages/round/member/src/components/Header.tsx`
-
-```tsx
-import React from 'react';
-import { useUser } from '@/hooks/useUser';
-import { canAccessRoundApp, getRoundManagerMemberUrl } from '@round/common';
-
-export const Header: React.FC = () => {
-  const { user } = useUser();
-
-  return (
-    <header className="header">
-      {/* ... 로고, 네비게이션 등 ... */}
-
-      {/* 채용 관리로 이동 버튼: 권한 있는 사용자에게만 표시 */}
-      {canAccessRoundApp(user) && (
-        <a
-          href={getRoundManagerMemberUrl(user, '/app/dashboard')}
-          className="btn-switch-app"
-        >
-          채용 관리로 이동
-        </a>
-      )}
-
-      {/* 평가 전용 모드 사용자에게는 안내 메시지 */}
-      {user?.appAccessControl === 'member_only' && (
-        <span className="badge-member-only">
-          평가 전용 모드
-        </span>
-      )}
-    </header>
-  );
-};
-```
-
-#### 6.2.3 리다이렉트 토스트 메시지
-
-**파일:** `packages/round/member/src/pages/Worktask.tsx`
-
-```tsx
-import React, { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { toast } from '@/components/Toast';
-
-export const WorktaskPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
-
-  useEffect(() => {
-    // URL 쿼리 파라미터에서 리다이렉트 이유 확인
-    const redirectReason = searchParams.get('redirect_reason');
-
-    if (redirectReason === 'member_only_mode') {
-      toast.info(
-        '평가 전용 모드로 설정되어 있습니다. 변경을 원하시면 관리자에게 문의하세요.',
-        { duration: 5000 }  // 5초 표시
-      );
-
-      // URL에서 파라미터 제거 (새로고침 시 토스트 재표시 방지)
-      searchParams.delete('redirect_reason');
-      window.history.replaceState({}, '', `${window.location.pathname}`);
-    }
-  }, [searchParams]);
-
-  return (
-    <div className="worktask-page">
-      {/* ... 평가 목록, 필터 등 ... */}
-    </div>
-  );
-};
-```
-
-### 6.3 알림 로직 수정
-
-**파일:** `packages/round/backend/src/services/notification.ts`
-
-```typescript
-import { User } from '@/types/user';
-
-/**
- * 오퍼레이션 알림 수신 대상 필터링
- * 평가 전용 모드 사용자는 제외
- */
-export const getNotificationRecipients = async (
-  organizationId: string,
-  roleFilter: string[]  // 예: ['Admin', 'Manager']
-): Promise<User[]> => {
-  // 1. 역할 기반 사용자 조회
-  const users = await getUsersByRole(organizationId, roleFilter);
-
-  // 2. 평가 전용 모드 사용자 제외
-  const operationalUsers = users.filter(
-    user => user.appAccessControl !== 'member_only'
-  );
-
-  return operationalUsers;
-};
-
-/**
- * 지원자 추가 알림 예시
- */
-export const notifyCandidateAdded = async (
-  candidate: Candidate,
-  jobId: string
-) => {
-  // 평가 전용 모드 제외한 Admin/Manager만 조회
-  const recipients = await getNotificationRecipients(
-    candidate.organizationId,
-    ['Admin', 'Manager']
-  );
-
-  recipients.forEach(user => {
-    sendEmail(user.email, '새 지원자가 등록되었습니다', {
-      candidateName: candidate.name,
-      jobTitle: candidate.jobTitle
-    });
-  });
-};
-```
-
----
-
-## 7. UI/UX 설계
-
-### 7.1 설정 화면 (조직 관리자용)
-
-#### 7.1.1 멤버 관리 리스트
+#### 5.1.1 멤버 관리 리스트
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -721,7 +256,7 @@ export const notifyCandidateAdded = async (
 - `member_only` → "평가 전용" (주황색 배지)
 - User 역할은 "N/A" 표시 (면접관은 애초에 round-member만 사용)
 
-#### 7.1.2 멤버 상세 > 권한 탭
+#### 5.1.2 멤버 상세 > 권한 탭
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -748,7 +283,7 @@ export const notifyCandidateAdded = async (
 │ │    채용 담당자가 전담하는 조직에 적합합니다.                │   │
 │ └───────────────────────────────────────────────────────────┘   │
 │                                                                   │
-│ [변경 이력 보기]                              [취소] [저장]      │
+│                                                [취소] [저장]      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -773,131 +308,57 @@ export const notifyCandidateAdded = async (
 3. 저장 성공 시 토스트:
    - "홍길동님의 접근 모드가 '평가 전용'으로 변경되었습니다."
 
-### 7.2 사용자 경험 (대표용)
+### 5.2 사용자 경험 (대표용)
+#### 5.2.1 할 수 있는 것 (✅ Can Do)
 
-#### 7.2.1 시나리오 1: 평가 전용 모드로 첫 로그인
+| 시나리오 | 상세 |
+|----------|------|
+| **지원자 열람** | 모든 공고의 지원자 리스트를 조회하고, 개별 지원자의 이력서·포트폴리오·연봉 정보 등 민감 정보 포함 전체 내용 열람 |
+| **평가 작성** | 서류 평가, 면접 평가, 과제 평가 등 모든 평가 유형에 점수와 코멘트 작성 |
+| **평가 내역 조회** | 본인 및 다른 평가자가 작성한 모든 평가 내역 확인 |
+| **면접 일정 확인** | 본인이 면접관으로 배정된 면접 일정 확인 (캘린더, 리스트 뷰) |
+| **지원자 상태 확인** | 지원자의 현재 채용 단계(서류→1차→2차→최종) 및 합격/불합격 여부 확인 |
+| **통계 대시보드 조회** | 채용 현황 대시보드, 공고별 지원자 수, 단계별 전환율 등 통계 데이터 열람 |
+| **평가 요청 알림 수신** | 본인에게 평가 요청이 들어왔을 때 알림 수신 (이 알림은 차단되지 않음) |
 
+**예시 시나리오: 대표가 임원 채용 후보를 평가할 때**
 ```
-1. 대표가 라운드 로그인
-2. 자동으로 round-member 페이지로 이동
-3. 상단에 안내 배너 표시 (첫 1회만, 로컬 스토리지로 "다시 보지 않기" 저장)
-
-┌──────────────────────────────────────────────────────────────┐
-│ 💡 평가 전용 모드로 설정되어 있습니다.                          │
-│    평가 및 면접 기능만 사용 가능합니다. 채용 관리 기능이        │
-│    필요하시면 [HR 담당자 이름]에게 문의하세요.                 │
-│                                                                │
-│    [자세히 보기]              [확인] [다시 보지 않기]          │
-└──────────────────────────────────────────────────────────────┘
-```
-
-#### 7.2.2 시나리오 2: round-app 직접 접근 시도
-
-```
-1. 대표가 북마크 또는 URL 직접 입력:
-   https://app.round.com/jobs
-
-2. 백엔드 미들웨어에서 리다이렉트:
-   https://member.round.com/worktask?redirect_reason=member_only_mode
-
-3. round-member 페이지 로드 후 토스트 메시지 표시 (3초):
-
-   ┌────────────────────────────────────────────┐
-   │ ℹ️ 평가 전용 모드입니다.                    │
-   │    변경을 원하시면 [김철수 HR 담당자]에게    │
-   │    문의하세요.                              │
-   └────────────────────────────────────────────┘
+1. round-member 접속 → [평가] 탭 클릭
+2. "CTO 채용" 공고의 최종 후보 3명 리스트 확인
+3. 후보 A 클릭 → 이력서, 연봉 정보, 1차/2차 면접 평가 내역 열람
+4. [평가 작성] 클릭 → 최종 면접 평가 점수 및 코멘트 입력
+5. 저장 → 완료
 ```
 
-#### 7.2.3 시나리오 3: 내 권한 확인
+#### 5.2.2 할 수 없는 것 (❌ Cannot Do)
 
+| 시나리오 | 상세 | 시도 시 결과 |
+|----------|------|--------------|
+| **지원자 등록** | 신규 지원자 수동 등록, 이력서 업로드 | round-app 리다이렉트 → 토스트 안내 |
+| **지원자 정보 수정** | 지원자 연락처, 이력서 변경, 태그 추가 | 수정 버튼 미표시 |
+| **지원자 삭제** | 지원자 데이터 삭제 | 삭제 버튼 미표시 |
+| **단계 이동** | 지원자를 다음 채용 단계로 이동 (예: 서류→1차) | 이동 버튼 미표시 |
+| **합격/불합격 처리** | 최종 합격 또는 불합격 처리 | 처리 버튼 미표시 |
+| **공고 생성/수정** | 새 공고 작성, 기존 공고 내용 수정, 마감일 변경 | round-app 리다이렉트 |
+| **메시지 발송** | 지원자에게 메일/문자 발송 | 발송 버튼 미표시 |
+| **면접 일정 생성** | 새 면접 일정 생성 및 면접관 배정 | round-app 리다이렉트 |
+| **채용 설정 변경** | 채용 단계 수정, 평가 양식 변경, 자동화 규칙 설정 | round-app 리다이렉트 |
+| **멤버 권한 관리** | 다른 멤버의 권한 변경, 초대 | round-app 리다이렉트 |
+| **오퍼레이션 알림 수신** | 지원자 등록, 평가 완료, 메시지 발송 결과 등 운영 알림 | 알림 자동 필터링 (수신 안 함) |
+
+**예시 시나리오: 대표가 합격 처리를 시도할 때**
 ```
-round-member 우측 상단 프로필 드롭다운 클릭
-
-┌─────────────────────────────────────┐
-│ 홍길동 (ceo@company.com)             │
-├─────────────────────────────────────┤
-│ 내 프로필                            │
-│ 내 권한 보기  ← 새 메뉴               │
-│ 설정                                 │
-│ ─────────────────────                │
-│ 로그아웃                             │
-└─────────────────────────────────────┘
-
-"내 권한 보기" 클릭 시 모달 표시:
-
-┌───────────────────────────────────────────────┐
-│ 내 권한                                        │
-├───────────────────────────────────────────────┤
-│ 조직 권한:       Admin                         │
-│ 접근 모드:       평가 전용 🟠                   │
-│                                               │
-│ 사용 가능한 기능:                              │
-│ ✅ 모든 공고 및 지원자 열람                     │
-│ ✅ 평가 작성 (서류, 면접, 과제)                 │
-│ ✅ 다른 평가자의 평가 내역 조회                 │
-│ ✅ 민감 정보 열람 (연봉, 개인정보 등)           │
-│                                               │
-│ 차단된 기능:                                   │
-│ ❌ 지원자 등록/수정/삭제                        │
-│ ❌ 공고 생성/수정                              │
-│ ❌ 메시지 발송 (메일/문자)                     │
-│ ❌ 채용 프로세스 수정                          │
-│                                               │
-│ 💡 설정 변경을 원하시면 조직 관리자에게          │
-│    문의하세요.                                 │
-│                                               │
-│                                     [닫기]    │
-└───────────────────────────────────────────────┘
+1. round-member에서 최종 후보 상세 페이지 접속
+2. "합격 처리" 버튼이 화면에 표시되지 않음
+3. HR 담당자(김철수)에게 슬랙으로 "후보 A 합격 처리 부탁드립니다" 요청
+4. HR 담당자가 round-app에서 합격 처리 완료
 ```
 
 ---
 
-## 8. 성공 지표 (Success Metrics)
+## 6. 출시 계획 (Release Plan)
 
-### 8.1 정량 지표
-
-| 지표 | 목표 | 측정 시점 | 측정 방법 |
-|------|------|----------|----------|
-| **평가 전용 모드 활성화 사용자 수** | > 5명/월 | 정식 출시 후 3개월 | `SELECT COUNT(DISTINCT user_id) FROM users WHERE app_access_control = 'member_only' AND updated_at > '2026-04-01'` |
-| **대표/임원 알림 감소율** | > 70% | 베타 테스트 기간 | 베타 고객 대상 Before/After 알림 수 비교 (사전 1주 vs 사후 1주) |
-| **관련 CS 문의 감소** | < 5건/월 | 정식 출시 후 1개월 | 지원 티켓 시스템에서 "권한", "알림 끄기", "대표 설정" 키워드 포함 문의 건수 추적 |
-| **설정 완료율** | > 90% | 지속 추적 | 설정 페이지 진입 → 저장 버튼 클릭 완료 비율 (Amplitude/Mixpanel) |
-| **리다이렉트 이탈률** | < 5% | 정식 출시 후 1개월 | round-app 리다이렉트 후 5분 이내 이탈한 사용자 비율 |
-
-### 8.2 정성 지표
-
-| 지표 | 목표 | 수집 방법 |
-|------|------|----------|
-| **사용자 만족도 (NPS)** | +20점 이상 개선 (대표/임원 그룹) | 베타 테스트 종료 시 설문 조사: "평가 전용 모드가 없었을 때 대비 현재 만족도는?" (0-10점 척도) |
-| **"이 기능 때문에 계약했다" 피드백** | 최소 3건 수집 (분기) | 영업팀 및 CS팀과 협업하여 계약 전환 고객 인터뷰 진행 |
-| **UI 혼란도** | "UI가 혼란스럽다" 피드백 < 10% | 베타 사용자 대상 설문: "평가 전용 모드에서 기능 위치를 찾기 어려웠나요?" (예/아니오) |
-
-### 8.3 비즈니스 지표
-
-| 지표 | 목표 | 추적 기간 |
-|------|------|----------|
-| **계약 전환율 (대표/임원 관여 조직)** | +5%p | 정식 출시 후 6개월 |
-| **평균 계약 금액 (ACV)** | 유지 또는 +10% | 정식 출시 후 6개월 |
-| **Churn Rate (대표/임원 사용자 포함 조직)** | < 5% | 연간 추적 |
-| **기능 사용률** | 활성 사용자 중 20% 이상이 평가 전용 모드 활용 | 정식 출시 후 1년 |
-
-### 8.4 Leading Indicators (초기 신호)
-
-**베타 테스트 기간 (2주) 중 확인할 지표:**
-- 설정 페이지 방문 후 활성화 클릭률 > 50%
-- 리다이렉트 후 이탈률 < 10%
-- 베타 사용자 1:1 인터뷰에서 "이 기능이 유용하다" 피드백 > 80%
-
-**정식 출시 첫 달 확인할 지표:**
-- 월 활성 사용자(MAU) 중 평가 전용 모드 사용자 비율 > 3%
-- 평가 전용 모드 사용자의 평균 세션 시간이 일반 Admin 대비 50% 이하 (효율성 증가 의미)
-
----
-
-## 9. 출시 계획 (Release Plan)
-
-### 9.1 Phase 1: MVP (2주)
+### 6.1 Phase 1: MVP (2주)
 
 **목표:** 핵심 기능 구현 및 내부 테스트
 
@@ -933,78 +394,20 @@ round-member 우측 상단 프로필 드롭다운 클릭
 - [ ] User 역할에게는 체크박스 비활성화 확인
 - [ ] 본인이 본인의 평가 전용 모드 설정 변경 시도 차단 확인
 
-### 9.2 Phase 2: 베타 테스트 (1주)
-
-**목표:** 실제 고객 환경에서 검증 및 피드백 수집
-
-| 일정 | 작업 항목 | 담당 |
-|------|----------|------|
-| **Day 1** | 베타 고객 3-5개사 선정 (대표가 직접 평가에 참여하는 조직 우선) | PM + 영업팀 |
-| **Day 1** | 베타 환경에 기능 배포 | DevOps |
-| **Day 2** | 베타 고객 대상 1:1 온보딩 세션 (30분, 화상) | PM + CS팀 |
-| | - 기능 시연 및 설정 방법 안내 | |
-| | - 대표 계정에 평가 전용 모드 활성화 지원 | |
-| **Day 2-6** | 베타 고객 사용 모니터링 | PM |
-| | - 일 1회 슬랙/이메일로 "오늘 어떠셨나요?" 확인 | |
-| | - Amplitude로 행동 데이터 추적 (리다이렉트, 설정 변경 등) | |
-| **Day 7** | 베타 종료 설문 조사 및 1:1 인터뷰 | PM |
-| | - 설문 항목: NPS, UI 혼란도, 알림 감소 체감, 개선 제안 | |
-| **Day 7** | 베타 결과 보고서 작성 | PM |
-| | - 정량 지표 달성 여부 | |
-| | - 주요 버그 및 개선 사항 정리 | |
-| | - Go/No-Go 결정 (정식 출시 진행 여부) | |
-
-**베타 선정 기준:**
-1. 대표 또는 C-Level 임원이 라운드 활성 사용자로 등록되어 있음
-2. 채용 담당자와 대표의 역할이 명확히 분리되어 있음
-3. 월 10건 이상 활발한 채용 진행 중
-4. 피드백 제공 의향이 있는 고객
-
-**Go/No-Go 기준:**
-- **Go (정식 출시):** 베타 사용자 80% 이상이 "유용하다" 피드백 + Critical 버그 0건
-- **Hold (추가 개선):** Critical 버그 1건 이상 또는 사용자 만족도 < 60%
-- **No-Go (폐기):** JTBD 미충족 (대표가 여전히 알림에 불만) 또는 사용률 < 20%
-
-### 9.3 Phase 3: 정식 출시 (1주)
-
-**목표:** 전체 고객 대상 배포 및 마케팅
-
-| 일정 | 작업 항목 | 담당 |
-|------|----------|------|
-| **Day 1** | 프로덕션 환경 배포 | DevOps |
-| | - 카나리 배포 (10% → 50% → 100%) | |
-| | - 모니터링 알림 설정 (에러율, 리다이렉트 실패 등) | |
-| **Day 1** | 릴리스 노트 발행 | PM + 마케팅팀 |
-| | - 블로그 포스트: "대표님도 쉽게 쓰는 라운드, 평가 전용 모드 출시" | |
-| | - 인앱 알림 (조직 설정 페이지 상단 배너 3일간 노출) | |
-| **Day 2** | 고객 대상 이메일 발송 | 마케팅팀 |
-| | - 제목: "[신기능] 대표님의 채용 참여가 더 편해집니다" | |
-| | - 타겟: Admin/Owner 역할 사용자 전체 | |
-| **Day 3** | 웨비나 또는 가이드 영상 제작 | CS팀 |
-| | - YouTube 가이드 영상 (2분): "평가 전용 모드 설정 방법" | |
-| | - 도움말 센터 문서 업데이트 | |
-| **Day 4-7** | 출시 후 모니터링 | PM + DevOps |
-| | - 에러율 추적 (목표: < 1%) | |
-| | - CS 문의 모니터링 (혼란 또는 버그 신고) | |
-| | - 사용률 추적 (일일 활성화 사용자 수) | |
-| **Week 2** | 회고 (Retrospective) 미팅 | 전체 팀 |
-| | - 무엇이 잘 되었나? 무엇을 개선할까? | |
-| | - Phase 1.5 또는 Phase 2 기능 우선순위 논의 | |
-
 ---
 
-## 10. 리스크 및 완화 방안
+## 7. 리스크 및 완화 방안
 
-### 10.1 제품 리스크
+### 7.1 제품 리스크
 
 | 리스크 | 확률 | 영향 | 완화 방안 | 책임자 |
 |--------|------|------|----------|--------|
 | **JTBD 미충족: 대표가 여전히 "필요한 알림"까지 못 받는다고 불만** | 중간 | 높음 | - 베타 테스트에서 알림 수신 패턴 면밀히 관찰<br>- Phase 1.5에서 "선택적 알림 설정" 기능 추가 검토 (예: "최종 합격 처리 시에만 알림 받기")<br>- 최악의 경우 "알림 설정"과 "앱 접근 제어"를 분리하는 구조로 재설계 | PM |
 | **사용자 혼란: "왜 버튼이 안 보이죠?" 문의 증가** | 중간 | 중간 | - 첫 로그인 시 안내 배너 및 "내 권한 보기" 기능 제공<br>- 도움말 센터에 FAQ 추가: "평가 전용 모드에서 할 수 없는 작업"<br>- CS팀에게 사전 교육 제공 (응답 템플릿 준비) | PM + CS팀 |
-| **긴급 상황 대응 불가: HR 담당자 퇴사 시 대표가 채용 관리 불가** | 낮음 | 중간 | - Phase 2에서 "긴급 모드 전환" 기능 구현 (24시간 한시)<br>- Owner 역할은 평가 전용 모드 설정 불가하도록 제한 (최소 1명은 항상 Full Access 보장) | PM |
+| **긴급 상황 대응 불가: HR 담당자 퇴사 시 대표가 채용 관리 불가** | 낮음 | 중간 | - Owner 역할은 평가 전용 모드 설정 불가하도록 제한 (최소 1명은 항상 Full Access 보장)<br>- 다른 Admin이 즉시 평가 전용 모드 해제 가능 | PM |
 | **경쟁사 대비 차별화 부족: Ashby의 자동화나 그리팅의 커스텀 역할에 비해 단순해 보임** | 낮음 | 중간 | - 마케팅에서 "가장 빠르고 간단한 설정"을 강조<br>- 장기적으로 Phase 3에서 자동화 규칙 엔진 추가 검토 | PM + 마케팅팀 |
 
-### 10.2 기술 리스크
+### 7.2 기술 리스크
 
 | 리스크 | 확률 | 영향 | 완화 방안 | 책임자 |
 |--------|------|------|----------|--------|
@@ -1013,170 +416,18 @@ round-member 우측 상단 프로필 드롭다운 클릭
 | **리다이렉트 루프: 특정 조건에서 무한 리다이렉트 발생** | 낮음 | 높음 | - 미들웨어에서 리다이렉트 카운터 추가 (3회 이상 시 에러 페이지)<br>- QA 단계에서 엣지 케이스 테스트 (예: 세션 만료 직후 접근) | Backend Team |
 | **API 우회 공격: 개발자 도구로 round-app API 직접 호출** | 낮음 | 높음 | - 모든 round-app API 엔드포인트에 `appAccessControl` 검증 미들웨어 적용<br>- 보안 테스트 단계에서 Postman으로 우회 시도 검증 | Security Team |
 
-### 10.3 비즈니스 리스크
+### 7.3 비즈니스 리스크
 
 | 리스크 | 확률 | 영향 | 완화 방안 | 책임자 |
 |--------|------|------|----------|--------|
-| **영업 기회 손실: 기능이 단순해서 엔터프라이즈 고객 유치 실패** | 중간 | 중간 | - 영업 자료에 "Phase 2/3 로드맵" 포함 (긴급 모드, 자동화 규칙 등)<br>- 베타 고객 성공 사례를 Case Study로 제작하여 영업 도구화 | 영업팀 + PM |
+| **영업 기회 손실: 기능이 단순해서 엔터프라이즈 고객 유치 실패** | 중간 | 중간 | - 영업 자료에 "Phase 2/3 로드맵" 포함 (공고별 접근 제한, 자동화 규칙 등)<br>- 베타 고객 성공 사례를 Case Study로 제작하여 영업 도구화 | 영업팀 + PM |
 | **매출 영향 없음: 이 기능이 계약 전환에 기여하지 않음** | 중간 | 낮음 | - 영업 파이프라인에서 "대표 권한" 관련 문의가 있는 리드에게 우선 소개<br>- 6개월 후 계약 전환율 데이터 분석 후 Go/Kill 결정 | PM + 영업팀 |
 
 ---
 
-## 11. 향후 확장 계획 (Future Enhancements)
+## 8. 의존성 및 제약사항
 
-### 11.1 Phase 1.5: 선택적 알림 설정 (필요 시)
-
-**트리거:** 베타 테스트에서 "중요한 알림까지 못 받아요" 피드백 발생 시
-
-**기능:**
-- 평가 전용 모드 사용자도 특정 알림은 수신 가능하도록 선택 옵션 제공
-
-**UI:**
-```
-조직 설정 > 멤버 관리 > [대표] > 권한 탭
-
-☑ 평가 전용 모드
-
-알림 설정 (선택사항):
-  ☐ 최종 합격 처리 시 알림 받기
-  ☐ 본인이 평가 요청 받았을 때 알림 받기
-  ☐ 본인 참여 면접 30분 전 알림 받기
-```
-
-**구현 예상 기간:** 1주
-
-### 11.2 Phase 2: 긴급 모드 전환 (4주)
-
-**내용:** US-6 참고 (24시간 한시적 round-app 접근)
-
-**기술 스펙:**
-- `emergency_mode` 테이블 추가
-- 타이머 UI 및 자동 만료 크론잡 구현
-- 감사 로그 강화
-
-**비즈니스 가치:**
-- HR 담당자 부재 시에도 대표가 긴급 채용 업무 처리 가능
-- "평가 전용 모드는 유연성이 없다"는 우려 해소
-
-### 11.3 Phase 2: 공고별 접근 제한 (선택사항)
-
-**문제:** 대표가 전사 채용을 볼 필요 없이, 특정 공고(예: C-Level 채용)만 집중하고 싶을 수 있음
-
-**기능:**
-- 평가 전용 모드 + 공고 필터링 조합
-- "이 멤버는 [CTO 채용], [CFO 채용] 공고만 열람 가능" 설정
-
-**UI:**
-```
-☑ 평가 전용 모드
-
-접근 가능 공고 (선택사항):
-  ☑ 모든 공고 (기본값)
-  ☐ 선택한 공고만:
-     [CTO 채용 ▼]
-     [+ 공고 추가]
-```
-
-**구현 예상 기간:** 2주
-
-### 11.4 Phase 3: 자동화 규칙 엔진 (Long-term)
-
-**비전:** Ashby의 "채용 팀 합류 시 자동 권한 부여" 기능 도입
-
-**기능:**
-- "역할이 Admin이고, 입사일이 1년 미만이면 → 자동으로 평가 전용 모드 활성화"
-- "특정 태그가 있는 사용자(예: '외부 자문단')는 → 자동으로 평가 전용 모드"
-
-**UI:**
-```
-조직 설정 > 자동화 규칙
-
-규칙 1: 신규 임원 온보딩
-  조건: 역할 = Admin AND 입사일 < 90일
-  동작: 평가 전용 모드 활성화
-  [편집] [삭제]
-
-[+ 규칙 추가]
-```
-
-**비즈니스 가치:**
-- 대규모 조직(100명+ 채용팀)에서 수동 설정 부담 제거
-- 엔터프라이즈 영업 시 Ashby와의 직접 비교 가능
-
-**구현 예상 기간:** 8주 (규칙 엔진 인프라 구축 포함)
-
-### 11.5 Phase 3: 필드 레벨 보안 (Long-term)
-
-**문제:** 평가 전용 모드 사용자도 연봉 정보를 보는 것이 부담스러운 경우 존재
-
-**기능:**
-- 지원자 프로필의 특정 필드(연봉, 주민번호 등)를 역할별로 마스킹
-- 예: 평가 전용 모드 사용자에게는 연봉 정보 "*****" 처리
-
-**참고:** 경쟁사 중 Ashby는 이미 필드 레벨 보안 제공, 나인하이어는 문서 마스킹 제공
-
-**차별화 포인트:** 라운드는 "데이터 필드 자체의 접근 제어" + "문서 마스킹" 모두 제공하여 가장 정교한 보안 제공
-
-**구현 예상 기간:** 6주
-
----
-
-## 12. 경쟁사 차별화 (Competitive Differentiation)
-
-### 12.1 왜 Ashby/그리팅/나인하이어와 다른가?
-
-| 측면 | Ashby | 그리팅 | 나인하이어 | 라운드 (본 PRD) |
-|------|-------|-------|-----------|----------------|
-| **접근 방식** | 자동화 중심 (채용 팀 합류 시 자동 권한 부여) | 커스텀 역할 중심 (공고별 100개 역할 생성 가능) | 고정 3단계 계층 (안정성 우선) | **앱 레벨 접근 제어 (역할은 그대로, 접근 앱만 제한)** |
-| **설정 복잡도** | 높음 (역할 매트릭스, 충돌 해결 로직 학습 필요) | 중간 (커스텀 역할 생성 시 수십 개 체크박스) | 낮음 (3단계 고정) | **매우 낮음 (체크박스 1개)** |
-| **구현 기간** | 6-8주 (자동화 인프라 구축) | 4-6주 (커스텀 역할 빌더) | 2-3주 (고정 역할) | **1-2주 (기존 2개 앱 활용)** |
-| **대표 JTBD 충족** | 부분적 (자동화는 편하지만 알림은 여전히 받음) | 부분적 (커스텀 역할로 제한 가능하나 복잡) | 부분적 (매니저 권한은 운영 기능 포함) | **완전 충족 (평가만, 알림 없음)** |
-| **긴급 상황 대응** | 역할 변경 필요 (수동) | 역할 변경 필요 (수동) | 역할 변경 필요 (수동) | **긴급 모드 (24시간 한시, Phase 2)** |
-| **엔터프라이즈 확장성** | 매우 높음 (규칙 엔진, 감사 로그 등) | 높음 (커스텀 역할 100개) | 낮음 (고정 역할) | **중간 (Phase 3에서 자동화 추가 가능)** |
-
-### 12.2 라운드만의 강점 (Unique Value Proposition)
-
-**1. 가장 빠른 구현 (Time-to-Market)**
-- 기존 아키텍처(round-app + round-member)를 활용하여 1-2주 만에 출시 가능
-- 경쟁사는 권한 시스템 재설계가 필요하여 수개월 소요
-
-**2. 가장 단순한 UX (Simplicity)**
-- 관리자: 체크박스 1개만 클릭
-- 사용자: 자동 리다이렉트, 추가 학습 불필요
-- 경쟁사는 역할 매트릭스 학습 또는 수십 개 체크박스 설정 필요
-
-**3. JTBD 완벽 충족 (Job-to-be-Done Fit)**
-- "평가는 하되, 운영은 안 하고 싶다" 니즈를 100% 충족
-- 경쟁사는 부분적 해결 또는 복잡한 설정 필요
-
-**4. 한국 시장 특화 (Localization)**
-- 한국 기업의 "대표가 모든 채용에 관여하지만 실무는 HR 팀" 문화 반영
-- Ashby는 글로벌 스타트업 중심, 그리팅/나인하이어는 범용 솔루션
-
-**5. 확장 가능한 아키텍처 (Future-Proof)**
-- Phase 2/3에서 Ashby의 자동화, 그리팅의 커스텀 역할 기능 추가 가능
-- 현재는 단순하지만, 고객 니즈에 따라 점진적으로 고도화
-
-### 12.3 영업 포지셔닝 메시지
-
-**고객에게 전달할 핵심 메시지:**
-
-> "라운드는 대표님이 채용에 집중할 수 있도록 돕습니다. 복잡한 권한 설정 없이, 체크박스 하나로 대표님은 평가만 하고 운영 알림은 받지 않습니다. 다른 ATS는 수십 개의 권한을 일일이 설정해야 하지만, 라운드는 1분 만에 끝납니다."
-
-**비교 테이블 (영업 자료용):**
-
-| 니즈 | Ashby | 그리팅 | 나인하이어 | 라운드 |
-|------|-------|-------|-----------|--------|
-| 대표가 평가만 하고 싶다 | △ (복잡한 역할 설정 필요) | △ (커스텀 역할 생성 필요) | △ (매니저는 운영 기능 포함) | ✅ (체크박스 1개) |
-| 알림 최소화 | ❌ (알림은 별도 설정) | △ (알림 설정 복잡) | ❌ (알림 설정 제한적) | ✅ (자동 차단) |
-| 설정 시간 | 30분+ | 20분+ | 5분 | **1분** |
-| 긴급 상황 대응 | 역할 변경 필요 | 역할 변경 필요 | 역할 변경 필요 | ✅ (긴급 모드, Phase 2) |
-
----
-
-## 13. 의존성 및 제약사항
-
-### 13.1 기술적 의존성
+### 8.1 기술적 의존성
 
 | 항목 | 상세 |
 |------|------|
@@ -1185,7 +436,7 @@ round-member 우측 상단 프로필 드롭다운 클릭
 | **Redis 캐싱** | 권한 정보 캐싱을 위해 Redis 또는 유사 인메모리 캐시 사용 가능해야 함 |
 | **감사 로그 인프라** | 기존 `audit_logs` 테이블 또는 로깅 시스템 활용 (신규 구축 불필요) |
 
-### 13.2 비즈니스 제약사항
+### 10.2 비즈니스 제약사항
 
 | 항목 | 상세 |
 |------|------|
@@ -1193,7 +444,7 @@ round-member 우측 상단 프로필 드롭다운 클릭
 | **CS 팀 교육** | 정식 출시 전 CS 팀에게 신기능 교육 및 FAQ 제공 (1시간 세션) |
 | **마케팅 리소스** | 릴리스 노트, 이메일, 영상 가이드 제작을 위한 마케팅 팀 리소스 확보 필요 (2-3일) |
 
-### 13.3 범위 제외 (Out of Scope)
+### 10.3 범위 제외 (Out of Scope)
 
 | 항목 | 이유 |
 |------|------|
@@ -1204,9 +455,9 @@ round-member 우측 상단 프로필 드롭다운 클릭
 
 ---
 
-## 14. 의사결정 기록 (Decision Log)
+## 9. 의사결정 기록 (Decision Log)
 
-### 14.1 왜 옵션 3을 선택했나?
+### 13.1 왜 옵션 3을 선택했나?
 
 **결정 일자:** 2026-01-09
 **결정자:** PM (최종 확인)
@@ -1230,21 +481,20 @@ round-member 우측 상단 프로필 드롭다운 클릭
 - **기존 아키텍처 활용**: round-app/member 분리 구조를 그대로 사용하여 기술 부채 최소화
 - **점진적 확장 가능**: Phase 2/3에서 자동화, 커스텀 역할 추가 가능
 
-### 14.2 주요 설계 결정
+### 13.2 주요 설계 결정
 
 | 질문 | 결정 | 이유 |
 |------|------|------|
 | **알림도 함께 차단할 것인가?** | 예, 오퍼레이션 알림 전체 차단 | JTBD의 핵심 ("알림이 너무 많다") 해결 |
 | **User 역할에도 적용할 것인가?** | 아니오, Admin/Manager만 | User는 이미 평가 전용이므로 중복 |
-| **긴급 모드를 MVP에 포함할 것인가?** | 아니오, Phase 2로 연기 | MVP 범위 최소화, 베타에서 니즈 검증 후 추가 |
 | **본인이 본인 권한 변경 가능한가?** | 아니오, 다른 Admin만 가능 | 실수 방지 (대표가 잘못 클릭하여 차단되는 상황 방지) |
 | **리다이렉트 시 에러 페이지 vs 자동 이동?** | 자동 이동 (리다이렉트) | 사용자 경험 최소 마찰 |
 
 ---
 
-## 15. 부록 (Appendix)
+## 10. 부록 (Appendix)
 
-### 15.1 용어 정의
+### 14.1 용어 정의
 
 | 용어 | 정의 |
 |------|------|
@@ -1252,10 +502,9 @@ round-member 우측 상단 프로필 드롭다운 클릭
 | **round-member** | 평가 전용 웹 애플리케이션 (지원자 열람, 평가 작성, 면접 평가 등) |
 | **평가 전용 모드 (Member-Only Mode)** | Admin/Manager 권한을 유지하되 round-member에만 접근 가능하도록 제한하는 설정 |
 | **오퍼레이션 알림 (Operational Notifications)** | 지원자 등록, 평가 완료, 과제 제출 등 채용 운영 과정에서 발생하는 알림 |
-| **긴급 모드 (Emergency Mode)** | 평가 전용 모드 사용자가 24시간 한시적으로 round-app에 접근할 수 있는 임시 권한 |
-| **감사 로그 (Audit Log)** | 권한 변경, 긴급 모드 활성화 등 보안 관련 이벤트 기록 |
+| **감사 로그 (Audit Log)** | 권한 변경 등 보안 관련 이벤트 기록 |
 
-### 15.2 참고 문서
+### 14.2 참고 문서
 
 1. **기존 리서치:** `/Users/terry/Terry's PM Note/Cursor-for-Product-Managers/initiatives/permission-custom/reference/reserch-permission-comparison.md`
 2. **Draft PRD:** `/Users/terry/Terry's PM Note/Cursor-for-Product-Managers/initiatives/permission-custom/prd/draft-permission-prd.md`
@@ -1264,7 +513,7 @@ round-member 우측 상단 프로필 드롭다운 클릭
    - 그리팅: `reference/guide-permission-greething.md`
    - 나인하이어: `reference/guide-permission-ninehire.md`
 
-### 15.3 FAQ (예상 질문)
+### 14.3 FAQ (예상 질문)
 
 **Q1. User 역할(일반 면접관)도 평가 전용 모드를 설정할 수 있나요?**
 A1. 아니오. User 역할은 이미 기본적으로 round-member만 사용하므로, 평가 전용 모드 설정이 불필요합니다. 체크박스는 Admin/Manager에게만 활성화됩니다.
@@ -1273,9 +522,7 @@ A1. 아니오. User 역할은 이미 기본적으로 round-member만 사용하�
 A2. 공고별 권한(공고 관리자, 공고 매니저 등)은 그대로 유지됩니다. 다만 round-app에 접근할 수 없으므로, 공고 관리 기능은 사용할 수 없습니다. round-member에서는 Admin 권한 기반으로 모든 공고를 열람할 수 있습니다.
 
 **Q3. 대표가 갑자기 채용 담당자 역할을 해야 한다면?**
-A3. 두 가지 방법이 있습니다.
-- **즉시 해제:** 다른 Admin이 조직 설정에서 평가 전용 모드 체크박스를 해제하면 즉시 round-app 접근 가능
-- **긴급 모드 (Phase 2):** 대표가 스스로 24시간 한시적으로 round-app 접근 활성화 (감사 로그 기록)
+A3. 다른 Admin이 조직 설정에서 평가 전용 모드 체크박스를 해제하면 즉시 round-app에 접근할 수 있습니다. 이 변경은 감사 로그에 기록됩니다.
 
 **Q4. 평가 전용 모드 사용자도 지원자를 삭제할 수 있나요?**
 A4. 아니오. 지원자 삭제는 round-app 전용 기능이므로 차단됩니다. round-member에서는 "삭제" 버튼이 표시되지 않습니다.
@@ -1285,7 +532,7 @@ A5. 베타 테스트에서 이 우려가 검증되면 Phase 1.5에서 "선택적
 
 ---
 
-## 16. 승인 및 서명
+## 11. 승인 및 서명
 
 | 역할 | 이름 | 승인 일자 | 서명 |
 |------|------|----------|------|
